@@ -1,0 +1,116 @@
+﻿@page "/operationadd"
+@using net_core_backend.Services.Interfaces
+@using Microsoft.Extensions.DependencyInjection
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Http
+@using Common.Models.Exceptions
+@using Domain.Entity
+@using net_core_backend.Repositories.Interfaces
+@inherits OwningComponentBase
+@inject IHttpContextAccessor _httpAccessor
+@inject NavigationManager NavigationManager
+
+<h3>Operation Adding</h3>
+
+@if (ErrorMessage != string.Empty)
+{
+    <h5>@ErrorMessage</h5>
+}
+
+@if (PersonId == Guid.Empty)
+{
+    <h5>Authorize first please</h5>
+}
+else
+{
+    <br />
+    <span>Operation Date Time</span>
+    <input type="date" name="dateTime" @bind="OperationDateTime" />
+    <br />
+    <span>Amount</span>
+    <input type="text" name="amount" @bind="OperationAmount" />
+    <br />
+    <span>Person Login</span>
+    <input type="text" name="login" @bind="Login" disabled />
+    <br />
+    <span>Operation Source</span>
+    <EditForm Style="display: inline" Model="OperationSource">
+        <InputSelect @bind-Value="OperationSource" @onchange="@((args) => OperationSource = args.Value.ToString())">
+            @foreach (var source in Sources)
+                {
+                <option value="@source.Name">@source.Name</option>
+                }
+        </InputSelect>
+    </EditForm>
+    <button @onclick="AddOperation">Add Operation</button>
+    <br />
+    <td><a href="/operation">Back to operations</a></td>
+}
+
+
+@code {
+    private AuthService _authService { get; set; }
+    private IOperationService _operationService { get; set; }
+    private IBaseRepository<OperationSource> _sourceRepository { get; set; }
+
+    public string ErrorMessage { get; set; } = string.Empty;
+    private Guid PersonId { get; set; } = Guid.Empty;
+    private ClaimsIdentity ClaimsIdentity { get; set; }
+
+    private Guid OperationId { get; set; } = Guid.NewGuid();
+    private DateTime OperationDateTime { get; set; } = DateTime.Now;
+    private int OperationSourceType { get; set; } = 0;
+    private string OperationSource { get; set; } = "Sallary";
+    private double OperationAmount { get; set; } = 3000;
+    private string Login { get; set; } = string.Empty;
+    public List<OperationSource> Sources { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _operationService = ScopedServices.GetRequiredService<IOperationService>();
+        _authService = ScopedServices.GetRequiredService<AuthService>();
+        _httpAccessor = ScopedServices.GetRequiredService<IHttpContextAccessor>();
+        _sourceRepository = ScopedServices.GetRequiredService<IBaseRepository<OperationSource>>();
+        ClaimsIdentity = _httpAccessor.HttpContext.User.Identities.FirstOrDefault();
+        Login = ClaimsIdentity.Name;
+        if (ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId") != null)
+        {
+            try
+            {
+                PersonId = new Guid(ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId").Value);
+            }
+            catch (Exception ex) when (ex is BaseException)
+            {
+                ErrorMessage = (ex as BaseException).Message;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+        }
+        else
+        {
+            PersonId = Guid.Empty;
+        }
+        Sources = _sourceRepository.GetAll();
+    }
+
+    private void AddOperation()
+    {
+        ErrorMessage = string.Empty;
+        try
+        {
+            _operationService.AddOperation(new net_core_backend.Models.OperationModel(Guid.NewGuid(), OperationDateTime, OperationSourceType, OperationSource,
+            OperationAmount, PersonId, Login), ClaimsIdentity);
+            NavigationManager.NavigateTo("Operation");
+        }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+}
