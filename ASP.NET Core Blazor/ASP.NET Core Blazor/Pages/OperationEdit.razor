@@ -1,0 +1,172 @@
+﻿@page "/operationedit/{id}"
+@using net_core_backend.Services.Interfaces
+@using Microsoft.Extensions.DependencyInjection
+@using System.Security.Claims
+@using net_core_backend.Models
+@using Microsoft.AspNetCore.Http
+@using Common.Models.Exceptions
+@using Domain.Entity
+@using net_core_backend.Repositories.Interfaces
+@inherits OwningComponentBase
+@inject IHttpContextAccessor _httpAccessor
+@inject NavigationManager NavigationManager
+
+<h3>Operation Edit</h3>
+
+@if (ErrorMessage != string.Empty)
+{
+    <h5>@ErrorMessage</h5>
+}
+
+@if (PersonId == Guid.Empty)
+{
+    <h5>Authorize first please</h5>
+}
+else
+{
+    <span>Operation Date Time</span>
+    <input type="datetime" name="dateTime" @bind="Operation.OperationDateTime" />
+    <br />
+    <span>Amount</span>
+    <input type="text" name="amount" @bind="Operation.Amount" />
+    <br />
+    <span>Person Login</span>
+    <input type="text" name="login" @bind="Login" disabled />
+    <br />
+    <span>Operation Source</span>
+    <select @onchange="ChangeSourceName">
+        @foreach (var sourceType in Enum.GetValues(typeof(net_core_backend.Models.OperationType)))
+        {
+            if ((OperationType)sourceType == EnumType)
+            {
+                <option value="@sourceType" selected>@sourceType</option>
+            }
+            else
+            {
+                <option value="@sourceType">@sourceType</option>
+            }
+        }
+    </select>
+    <select @onchange="(value) => Operation.Source = value.Value.ToString()">
+        @foreach (var source in Sources)
+        {
+            if (source.Name == Operation.Source)
+            {
+                <option value="@source.Name" selected>@source.Name</option>
+            }
+            else
+            {
+                <option value="@source.Name">@source.Name</option>
+            }
+        }
+    </select>
+    <br />
+    <button @onclick="EditOperation">Edit</button>
+    <td><a href="/operation">Back to operations</a></td>
+}
+
+@code {
+    private AuthService _authService { get; set; }
+    private IOperationService _operationService { get; set; }
+    private IBaseRepository<OperationSource> _sourceRepository { get; set; }
+
+    public string ErrorMessage { get; set; } = string.Empty;
+    private ClaimsIdentity ClaimsIdentity { get; set; }
+
+    private OperationModel Operation { get; set; } = new OperationModel();
+    private OperationType EnumType { get; set; } = OperationType.Income;
+    [Parameter]
+    public string Id { get; set; }
+    private Guid OperationId { get; set; } = Guid.Empty;
+    private string Login { get; set; } = string.Empty;
+    private Guid PersonId { get; set; } = Guid.Empty;
+
+    public List<OperationSource> Sources { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _operationService = ScopedServices.GetRequiredService<IOperationService>();
+        _sourceRepository = ScopedServices.GetRequiredService<IBaseRepository<OperationSource>>();
+        _authService = ScopedServices.GetRequiredService<AuthService>();
+        _httpAccessor = ScopedServices.GetRequiredService<IHttpContextAccessor>();
+        ClaimsIdentity = _httpAccessor.HttpContext.User.Identities.FirstOrDefault();
+        Login = ClaimsIdentity.Name;
+        if (ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId") != null)
+        {
+            try
+            {
+                PersonId = new Guid(ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId").Value);
+                Operation = _operationService.GetAllOperationsWithSource().Operations.FirstOrDefault(x => x.Id == OperationId);
+            }
+            catch (Exception ex) when (ex is BaseException)
+            {
+                ErrorMessage = (ex as BaseException).Message;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+        }
+        else
+        {
+            PersonId = Guid.Empty;
+        }
+        OperationId = new Guid(Id);
+        Sources = _sourceRepository.GetAll();
+
+        UpdateForm();
+    }
+
+    private void UpdateForm()
+    {
+        try
+        {
+            Operation = _operationService.GetAllOperationsWithSource().Operations.FirstOrDefault(x => x.Id == OperationId);
+            EnumType = (Operation.Type == 0) ? OperationType.Income : OperationType.Expanse;
+            Sources = Sources.Where(x => x.Type == EnumType).ToList();
+        }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private void ChangeSourceName(ChangeEventArgs args)
+    {
+        if (args.Value.ToString() == "Expanse")
+        {
+            EnumType = OperationType.Expanse;
+        }
+        else if (args.Value.ToString() == "Income")
+        {
+            EnumType = OperationType.Income;
+        } 
+        else
+        {
+            ErrorMessage = "Problem with select type";
+        }
+        Sources = _sourceRepository.GetFiltered(x => x.Type == EnumType).ToList();
+        Operation.Source = Sources.FirstOrDefault().Name;
+    }
+
+    private void EditOperation()
+    {
+        try
+        {
+            _operationService.UpdateOperation(Operation, ClaimsIdentity);
+            NavigationManager.NavigateTo("Operation");
+        }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+}

@@ -1,0 +1,120 @@
+﻿@page "/sourceedit/{id}"
+@using Common.Models
+@using Microsoft.Extensions.DependencyInjection
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Http
+@using Common.Models.Exceptions
+@using Domain.Entity
+@using net_core_backend.Repositories.Interfaces
+@using Infractructure.Services.Interfaces
+@using net_core_backend.Models
+@inherits OwningComponentBase
+@inject IHttpContextAccessor _httpAccessor
+@inject NavigationManager NavigationManager
+
+<h3>Source Edit</h3>
+
+@if (ErrorMessage != string.Empty)
+{
+    <h5>@ErrorMessage</h5>
+}
+
+@if (PersonId == Guid.Empty)
+{
+    <h5>Authorize first please</h5>
+}
+else
+{
+    <br />
+    <span>Source name</span>
+    <input type="text" name="name" @bind="SourceName" />
+    <br />
+    <EditForm Style="display: inline" Model="EnumType">
+        <InputSelect @bind-Value="EnumType" @onchange="@((args) => EnumType = (net_core_backend.Models.OperationType)args.Value)">
+            @foreach (var sourceType in Enum.GetValues(typeof(net_core_backend.Models.OperationType)))
+                {
+                <option value="@sourceType">@sourceType</option>
+                }
+        </InputSelect>
+    </EditForm>
+    <button @onclick="EditSource">Edit Source</button>
+    <br />
+    <td><a href="/source">Back to sources</a></td>
+}
+
+
+@code {
+    private AuthService _authService { get; set; }
+    private ISourceService _sourceService { get; set; }
+    private IBaseRepository<OperationSource> _sourceRepository { get; set; }
+
+    public string ErrorMessage { get; set; } = string.Empty;
+    private Guid PersonId { get; set; } = Guid.Empty;
+    private ClaimsIdentity ClaimsIdentity { get; set; }
+
+    [Parameter]
+    public string Id { get; set; }
+    private string SourceName { get; set; } = "Sallary";
+    private OperationType EnumType { get; set; } = OperationType.Income;
+
+    protected override void OnInitialized()
+    {
+        _authService = ScopedServices.GetRequiredService<AuthService>();
+        _httpAccessor = ScopedServices.GetRequiredService<IHttpContextAccessor>();
+        _sourceRepository = ScopedServices.GetRequiredService<IBaseRepository<OperationSource>>();
+        _sourceService = ScopedServices.GetRequiredService<ISourceService>();
+        ClaimsIdentity = _httpAccessor.HttpContext.User.Identities.FirstOrDefault();
+        if (ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId") != null)
+        {
+            try
+            {
+                PersonId = new Guid(ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId").Value);
+            }
+            catch (Exception ex) when (ex is BaseException)
+            {
+                ErrorMessage = (ex as BaseException).Message;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+        }
+        else
+        {
+            PersonId = Guid.Empty;
+        }
+        UpdateForm();
+    }
+
+    private void UpdateForm()
+    {
+        try
+        {
+            var source = _sourceService.GetSource(Id);
+            SourceName = source.Name;
+            EnumType = (source.Type == 0) ? OperationType.Income : OperationType.Expanse;
+        }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private void EditSource()
+    {
+        ErrorMessage = string.Empty;
+        try
+        {
+            _sourceService.AddSource(new SourceModel { Name = SourceName, Type = (int)EnumType });
+            NavigationManager.NavigateTo("Source");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+}

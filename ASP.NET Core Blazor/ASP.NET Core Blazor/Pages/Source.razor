@@ -1,0 +1,120 @@
+﻿@page "/source"
+@using Infractructure.Services.Interfaces
+@using Microsoft.Extensions.DependencyInjection
+@using Domain.Entity
+@using net_core_backend.Repositories.Interfaces
+@using Microsoft.AspNetCore.Http
+@using System.Security.Claims
+@inherits OwningComponentBase
+@inject IHttpContextAccessor _httpAccessor
+@inject NavigationManager NavigationManager
+
+<h1>Source</h1>
+@if (ErrorMessage != string.Empty)
+{
+    <h5>@ErrorMessage</h5>
+}
+@if (PersonId == Guid.Empty)
+{
+    <h5>Authorize first please</h5>
+}
+else
+{
+    <button @onclick="AddSource">Add Source</button>
+    @if (Sources != null && Sources.Count > 0)
+    {
+        <table style="border-spacing: 10px 5px; border-collapse: separate; text-align: center">
+            <tr>
+                <td>Name</td>
+                <td>Type</td>
+            </tr>
+            @foreach (var item in Sources)
+            {
+                <tr>
+                    <td>@item.Name</td>
+                    <td>@item.Type</td>
+                    <td><a href="/sourceedit/@item.Id">Edit</a></td>
+                    <td><a href="javascript: void(0);" @onclick="() => DeleteSource(item.Id)">Delete</a></td>
+                </tr>
+            }
+        </table>
+    }
+}
+
+
+
+@code {
+    private ISourceService _sourceService { get; set; }
+    private IBaseRepository<OperationSource> _sourceRepository { get; set; }
+
+    public string ErrorMessage { get; set; } = string.Empty;
+    private string OperationName { get; set; } = "Sallary";
+    private net_core_backend.Models.OperationType EnumType { get; set; } = net_core_backend.Models.OperationType.Income;
+    private string OldOperationName { get; set; } = "";
+    public List<OperationSource> Sources { get; set; }
+    private Guid PersonId { get; set; } = Guid.NewGuid();
+    private ClaimsIdentity ClaimsIdentity { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _httpAccessor = ScopedServices.GetRequiredService<IHttpContextAccessor>();
+        ClaimsIdentity = _httpAccessor.HttpContext.User.Identities.FirstOrDefault();
+        _sourceService = ScopedServices.GetRequiredService<ISourceService>();
+        _sourceRepository = ScopedServices.GetRequiredService<IBaseRepository<OperationSource>>();
+        if (ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId") != null)
+        {
+            PersonId = new Guid(ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId").Value);
+        }
+        else
+        {
+            PersonId = Guid.Empty;
+        }
+        UpdateTable();
+    }
+
+    private void AddSource()
+    {
+        NavigationManager.NavigateTo("SourceAdd");
+
+
+        UpdateTable();
+    }
+
+    private void DeleteSource(Guid id)
+    {
+        ErrorMessage = string.Empty;
+        try
+        {
+            _sourceService.DeleteSource(id);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+
+        UpdateTable();
+    }
+
+    private void UpdateSource()
+    {
+        ErrorMessage = string.Empty;
+        try
+        {
+            var sourceModel = _sourceService.GetSource(OldOperationName);
+            sourceModel.Name = OperationName;
+            sourceModel.Type = (int)EnumType;
+            _sourceService.UpdateSource(sourceModel);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+
+        UpdateTable();
+    }
+
+    private void UpdateTable()
+    {
+        Sources = _sourceRepository.GetAll();
+    }
+}

@@ -1,0 +1,190 @@
+﻿@page "/operation"
+@using net_core_backend.Services.Interfaces
+@using Microsoft.Extensions.DependencyInjection
+@using System.Security.Claims
+@using net_core_backend.Models
+@using Microsoft.AspNetCore.Http
+@using Common.Models.Exceptions
+@inherits OwningComponentBase
+@inject IHttpContextAccessor _httpAccessor
+@inject NavigationManager NavigationManager
+
+
+<h1>Operations</h1>
+
+@if (ErrorMessage != string.Empty)
+{
+    <h5>@ErrorMessage</h5>
+}
+
+@if (PersonId == Guid.Empty)
+{
+    <h5>Authorize first please</h5>
+}
+else
+{
+    <span>First Date Time</span>
+    <input style="margin-left: 10px" type="date" name="firstDateTime" @bind="FirstDateTime" />
+    <span style="margin-left: 10px">Second Date Time</span>
+    <input style="margin-left: 10px" type="date" name="secondDateTime" @bind="SecondDateTime" />
+    <button style="margin-left: 10px" @onclick="GetOperationForTime">Find for Date</button>
+    <button style="margin-left: 10px" @onclick="AddOperation">Add Operation</button>
+    <br />
+    @if (Operations != null && Operations.Count > 0)
+    {
+        <table style="border-spacing: 10px 5px; border-collapse: separate; text-align: center">
+            <tr>
+                <td>Operation Date</td>
+                <td>Amount</td>
+                <td>Login</td>
+                <td>Source Name</td>
+                <td>Source Type</td>
+            </tr>
+            @foreach (var item in OperationsDisplay)
+            {
+                <tr>
+                    <td>@item.OperationDateTime.ToString("dd/MM/yyyy")</td>
+                    <td>@item.Amount</td>
+                    <td>@item.PersonLogin</td>
+                    <td>@item.Source</td>
+                    @if (item.Type == 0)
+                    {
+                        <td>Income</td>
+                    }
+                    else
+                    {
+                        <td>Expanse</td>
+                    }
+                    <td><a href="/operationedit/@item.Id">Edit</a></td>
+                    <td><a href="javascript: void(0);" @onclick="() => DeleteOperation(item.Id)">Delete</a></td>
+                </tr>
+            }
+        </table>
+        if (Operations.Count > 10)
+        {
+            <p style="text-align:center">
+                @if (PageNumber > 1)
+                {
+                    <a href="javascript: void(0);" @onclick="() => PageDown()">Previous Page</a>
+                }
+                <span>Page Number: @PageNumber</span>
+                @if (Operations.Count > PageNumber * 10)
+                {
+                    <a href="javascript: void(0);" @onclick="() => PageUp()">Next Page</a>
+                }
+            </p>
+        }
+    }
+}
+
+@code {
+    private AuthenticationStateProvider _authService { get; set; }
+    private IOperationService _operationService;
+
+    public string ErrorMessage { get; set; } = string.Empty;
+    private Guid PersonId { get; set; } = Guid.Empty;
+    private ClaimsIdentity ClaimsIdentity { get; set; }
+
+    private List<OperationModel> Operations { get; set; }
+    private List<OperationModel> OperationsDisplay { get; set; }
+
+    private int PageNumber { get; set; } = 1;
+    private DateTime FirstDateTime { get; set; } = DateTime.Now;
+    private DateTime SecondDateTime { get; set; } = DateTime.Now;
+
+    protected override void OnInitialized()
+    {
+        _operationService = ScopedServices.GetRequiredService<IOperationService>();
+        _authService = ScopedServices.GetRequiredService<AuthenticationStateProvider>();
+        _httpAccessor = ScopedServices.GetRequiredService<IHttpContextAccessor>();
+        ClaimsIdentity = _httpAccessor.HttpContext.User.Identities.FirstOrDefault();
+        if (ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId") != null)
+        {
+            try
+            {
+                PersonId = new Guid(ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId").Value);
+            }
+            catch (Exception ex) when (ex is BaseException)
+            {
+                ErrorMessage = (ex as BaseException).Message;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+        }
+        else
+        {
+            PersonId = Guid.Empty;
+        }
+
+        UpdateOperations();
+    }
+
+    private void DeleteOperation(Guid guid)
+    {
+        ErrorMessage = string.Empty;
+        try
+        {
+            _operationService.DeleteOperation(guid, ClaimsIdentity);
+        }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+
+        UpdateOperations();
+    }
+
+    private void GetOperationForTime()
+    {
+        ErrorMessage = string.Empty;
+        try
+        {
+            Operations = _operationService.GetOperationForTime(new OperationRequest { DateFirst = FirstDateTime, DateSecond = SecondDateTime })
+                .Operations.OrderBy(x => x.OperationDateTime).ToList();
+        }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        PageNumber = 1;
+        UpdateTable();
+    }
+
+    private void AddOperation()
+    {
+        NavigationManager.NavigateTo("OperationAdd");
+    }
+
+    private void UpdateOperations()
+    {
+        Operations = _operationService.GetAllOperationsWithSource().Operations.OrderBy(x => x.OperationDateTime).ToList();
+        UpdateTable();
+    }
+
+    private void PageDown()
+    {
+        PageNumber--;
+        UpdateTable();
+    }
+
+    private void PageUp()
+    {
+        PageNumber++;
+        UpdateTable();
+    }
+
+    private void UpdateTable()
+    {
+        OperationsDisplay = Operations.Skip((PageNumber - 1) * 10).Take(10).ToList();
+    }
+}
