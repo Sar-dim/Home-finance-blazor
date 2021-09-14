@@ -74,6 +74,8 @@ else
                 }
             </p>
         }
+        <p>Total amount income: @TotalIncome</p>
+        <p>Total amount expanse: @TotalExpanse</p>
     }
 }
 
@@ -87,6 +89,8 @@ else
 
     private List<OperationModel> Operations { get; set; }
     private List<OperationModel> OperationsDisplay { get; set; }
+    private double TotalIncome { get; set; } = 0;
+    private double TotalExpanse { get; set; } = 0;
 
     private int PageNumber { get; set; } = 1;
     private DateTime FirstDateTime { get; set; } = DateTime.Now;
@@ -145,8 +149,11 @@ else
         ErrorMessage = string.Empty;
         try
         {
-            Operations = _operationService.GetOperationForTime(new OperationRequest { DateFirst = FirstDateTime, DateSecond = SecondDateTime })
-                .Operations.OrderBy(x => x.OperationDateTime).ToList();
+            var response = _operationService.GetOperationForTime(new OperationRequest
+            { DateFirst = FirstDateTime, DateSecond = SecondDateTime });
+            Operations = response.Operations.OrderBy(x => x.OperationDateTime).ToList();
+            TotalIncome = response.IncomeSumm;
+            TotalExpanse = response.ExpanseSumm;
         }
         catch (Exception ex) when (ex is BaseException)
         {
@@ -167,7 +174,10 @@ else
 
     private void UpdateOperations()
     {
-        Operations = _operationService.GetAllOperationsWithSource().Operations.OrderBy(x => x.OperationDateTime).ToList();
+        var response = _operationService.GetAllOperationsWithSource();
+        Operations = response.Operations.OrderBy(x => x.OperationDateTime).ToList();
+        TotalIncome = response.IncomeSumm;
+        TotalExpanse = response.ExpanseSumm;
         UpdateTable();
     }
 
