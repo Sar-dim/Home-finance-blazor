@@ -35,6 +35,10 @@ else
                     <td>@item.Type</td>
                     <td><a href="/sourceedit/@item.Id">Edit</a></td>
                     <td><a href="javascript: void(0);" @onclick="() => DeleteSource(item.Id)">Delete</a></td>
+                    @if(item.Id == ConfirmId)
+                    {
+                        <td><a href="javascript: void(0);" @onclick="() => DeleteSource(item.Id, true)">Confirm</a></td>
+                    }
                 </tr>
             }
         </table>
@@ -46,6 +50,7 @@ else
 @code {
     private ISourceService _sourceService { get; set; }
     private IBaseRepository<OperationSource> _sourceRepository { get; set; }
+    private IBaseRepository<net_core_backend.Models.Operation> _operationRepository { get; set; }
 
     public string ErrorMessage { get; set; } = string.Empty;
     private string OperationName { get; set; } = "Sallary";
@@ -55,12 +60,15 @@ else
     private Guid PersonId { get; set; } = Guid.NewGuid();
     private ClaimsIdentity ClaimsIdentity { get; set; }
 
+    public Guid ConfirmId { get; set; } = Guid.Empty;
+
     protected override void OnInitialized()
     {
         _httpAccessor = ScopedServices.GetRequiredService<IHttpContextAccessor>();
         ClaimsIdentity = _httpAccessor.HttpContext.User.Identities.FirstOrDefault();
         _sourceService = ScopedServices.GetRequiredService<ISourceService>();
         _sourceRepository = ScopedServices.GetRequiredService<IBaseRepository<OperationSource>>();
+        _operationRepository = ScopedServices.GetRequiredService<IBaseRepository<net_core_backend.Models.Operation>>();
         if (ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId") != null)
         {
             PersonId = new Guid(ClaimsIdentity.Claims.FirstOrDefault(x => x.Type == "PersonId").Value);
@@ -80,12 +88,23 @@ else
         UpdateTable();
     }
 
-    private void DeleteSource(Guid id)
+    private void DeleteSource(Guid id, bool confirm = false)
     {
         ErrorMessage = string.Empty;
         try
         {
-            _sourceService.DeleteSource(id);
+            if (!confirm)
+            {
+                if (_operationRepository.GetFiltered(x => x.SourceId == id).FirstOrDefault() != null)
+                {
+                    ErrorMessage = "You have operations with this source. They will be deleted too. Press confirm to continue.";
+                    ConfirmId = id;
+                }
+            }
+            else
+            {
+                _sourceService.DeleteSource(id);
+            }
         }
         catch (Exception ex)
         {

@@ -90,6 +90,10 @@ else
             _sourceService.AddSource(new SourceModel { Name = SourceName, Type = (int)EnumType });
             NavigationManager.NavigateTo("Source");
         }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;

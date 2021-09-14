@@ -144,13 +144,24 @@ else
         else if (args.Value.ToString() == "Income")
         {
             EnumType = OperationType.Income;
-        } 
+        }
         else
         {
             ErrorMessage = "Problem with select type";
         }
-        Sources = _sourceRepository.GetFiltered(x => x.Type == EnumType).ToList();
-        Operation.Source = Sources.FirstOrDefault().Name;
+        try
+        {
+            Sources = _sourceRepository.GetFiltered(x => x.Type == EnumType).ToList();
+            Operation.Source = Sources.FirstOrDefault().Name;
+        }
+        catch (Exception ex) when (ex is BaseException)
+        {
+            ErrorMessage = (ex as BaseException).Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
     }
 
     private void EditOperation()
